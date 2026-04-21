@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 
 const COLORS = {
   bg: "#0a0a0f",
@@ -181,7 +181,7 @@ function QuizSection({ questions }) {
 }
 
 export default function StudyTool() {
-  const [inputType, setInputType] = useState("text");
+  
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

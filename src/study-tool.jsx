@@ -257,9 +257,7 @@ Generate exactly 6 flashcards and 5 quiz questions.`;
       });
 
       userContent = prompt;
-
-      // send base64 separately
-      const res = await fetch("http://127.0.0.1:5000/generate", {
+const res = await fetch("https://ai-study-tool-api.onrender.com/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -269,7 +267,6 @@ Generate exactly 6 flashcards and 5 quiz questions.`;
           pdfBase64: base64,
         }),
       });
-
       const textResponse = await res.text();
 
       let data;
@@ -291,7 +288,7 @@ Generate exactly 6 flashcards and 5 quiz questions.`;
     }
 
     // TEXT MODE API CALL
-    const res = await fetch("http://localhost:5000/generate", {
+    const res = await fetch("https://ai-study-tool-api.onrender.com", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

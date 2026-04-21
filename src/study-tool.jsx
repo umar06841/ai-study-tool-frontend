@@ -206,6 +206,13 @@ export default function StudyTool() {
     reader.readAsDataURL(f);
   }, []);
 
+  const toBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+  });
+
   const generate = async () => {
     if (inputType === "text" && !text.trim()) { setError("Please paste some text first."); return; }
     if (inputType === "file" && !file) { setError("Please upload a file first."); return; }
@@ -215,16 +222,24 @@ export default function StudyTool() {
     setResult(null);
 
     try {
+      let payload = { content: text || file.name };
+
+      if (inputType === "file" && fileType === "pdf") {
+        const base64 = await toBase64(file);
+        payload = { pdfBase64: base64 };
+      }
+
       const res = await fetch("https://ai-study-tool-api.onrender.com/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: inputType === "text" ? text : file.name }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       setResult(data);
       setTab("flashcards");
     } catch (e) {
+      console.error(e);
       setError("Failed to generate. Please try again.");
     }
 

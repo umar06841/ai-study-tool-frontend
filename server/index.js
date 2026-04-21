@@ -2,8 +2,12 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { OpenAI } from "openai";
+import { createRequire } from "module";
 
 dotenv.config();
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 const app = express();
 
@@ -16,21 +20,37 @@ const client = new OpenAI({
 });
 
 app.get("/", (req, res) => {
-  res.json({ status: "OK 🚀 Server running" });
+  res.json({ message: "Server is running" });
 });
 
 app.post("/generate", async (req, res) => {
   try {
-    const { content } = req.body;
+    let { content, pdfBase64 } = req.body;
+
+    if (pdfBase64) {
+      try {
+        const cleanBase64 = pdfBase64.includes(",")
+          ? pdfBase64.split(",")[1]
+          : pdfBase64;
+
+        const buffer = Buffer.from(cleanBase64, "base64");
+        const pdfData = await pdfParse(buffer);
+        content = pdfData.text || "";
+      } catch (err) {
+        console.error("PDF Error:", err.message);
+        return res.status(400).json({ error: "Failed to read PDF" });
+      }
+    }
 
     if (!content || content.trim().length < 5) {
       return res.status(400).json({ error: "No content provided" });
     }
 
-    // Truncate if too long
-    const text = content.length > 10000 
-      ? content.substring(0, 10000) 
-      : content;
+    // Truncate for token limit
+    const maxChars = 12000;
+    if (content.length > maxChars) {
+      content = content.substring(0, maxChars);
+    }
 
     const completion = await client.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -38,30 +58,31 @@ app.post("/generate", async (req, res) => {
       max_tokens: 1500,
       messages: [
         {
-          role: "system",
-          content: `Return ONLY valid JSON:
+          role: "user",
+          content: `Create study materials from this content. Return ONLY valid JSON:
 {
-  "summary": "brief summary",
-  "flashcards": [{"front": "Q?", "back": "A"}],
-  "quiz": [{"question": "Q?", "options": ["A", "B", "C", "D"], "correct": 0}]
-}`,
+  "summary": "2-3 sentence summary",
+  "flashcards": [{"front": "question", "back": "answer"}],
+  "quiz": [{"question": "question?", "options": ["a", "b", "c", "d"], "correct": 0}]
+}
+
+Make 6 flashcards and 5 quiz questions from this:
+${content}`,
         },
-        { role: "user", content: text },
       ],
     });
 
-    const raw = completion.choices[0].message.content
-      .replace(/```json|```/g, "")
-      .trim();
+    const text = completion.choices[0].message.content;
+    const json = text.replace(/```json|```/g, "").trim();
+    const result = JSON.parse(json);
 
-    const parsed = JSON.parse(raw);
-    res.json(parsed);
-
-  } catch (err) {
-    console.error("ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    res.json(result);
+  } catch (error) {
+    console.error("Error:", error.message);
+    res.status(500).json({ error: "Failed to process" });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server on port ${PORT}`));
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
+});

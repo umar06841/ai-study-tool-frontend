@@ -255,7 +255,7 @@ Generate exactly 6 flashcards and 5 quiz questions.`;
         userContent = prompt;
       }
 
-      const res = await fetch("http://localhost:5000/generate", {
+      const res = await fetch("https://ai-study-tool-api.onrender.com", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

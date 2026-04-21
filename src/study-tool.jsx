@@ -1,7 +1,5 @@
 import { useState, useRef, useCallback } from "react";
 
- // Paste your gsk_... key here
-
 const COLORS = {
   bg: "#0a0a0f",
   card: "#13131a",
@@ -185,141 +183,47 @@ function QuizSection({ questions }) {
 export default function StudyTool() {
   const [inputType, setInputType] = useState("text");
   const [text, setText] = useState("");
-  const [file, setFile] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
-  const [fileType, setFileType] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [tab, setTab] = useState("flashcards");
-  const [dragOver, setDragOver] = useState(false);
-  const fileRef = useRef();
-
-  const handleFile = useCallback((f) => {
-    if (!f) return;
-    const isPDF = f.type === "application/pdf";
-    const isImage = f.type.startsWith("image/");
-    if (!isPDF && !isImage) { setError("Please upload a PDF or image file."); return; }
-    setFile(f);
-    setFileType(isPDF ? "pdf" : "image");
-    setError("");
-    const reader = new FileReader();
-    reader.onload = (e) => setFilePreview(e.target.result);
-    reader.readAsDataURL(f);
-  }, []);
 
   const generate = async () => {
-  if (inputType === "text" && !text.trim()) {
-    setError("Please paste some text first.");
-    return;
-  }
-  if (inputType === "file" && !file) {
-    setError("Please upload a file first.");
-    return;
-  }
-
-  setLoading(true);
-  setError("");
-  setResult(null);
-
-  try {
-    const prompt = `You are a smart study assistant. Analyze the provided content and return ONLY valid JSON (no markdown, no explanation) in this exact format:
-{
-  "summary": "A clear 3-5 sentence summary of the main topics.",
-  "flashcards": [
-    {"front": "Question about a key concept?", "back": "Clear concise answer."}
-  ],
-  "quiz": [
-    {
-      "question": "A multiple choice question?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correct": 0
+    if (!text.trim()) {
+      setError("Please paste some text first.");
+      return;
     }
-  ]
-}
-Generate exactly 6 flashcards and 5 quiz questions.`;
 
-    let userContent = "";
+    setLoading(true);
+    setError("");
+    setResult(null);
 
-    if (inputType === "text") {
-      userContent = `${prompt}\n\nContent:\n${text}`;
-    } else {
-      // ⚠️ IMPORTANT: send PDF as base64 (NOT readAsText)
-      const reader = new FileReader();
-
-      const base64 = await new Promise((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result.split(",")[1]; // remove data:... prefix
-          resolve(result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      userContent = prompt;
-const res = await fetch("https://ai-study-tool-api.onrender.com/generate", {
+    try {
+      const response = await fetch("https://ai-study-tool-api.onrender.com/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          content: userContent,
-          pdfBase64: base64,
+          content: text,
         }),
       });
-      const textResponse = await res.text();
 
-      let data;
-      try {
-        data = JSON.parse(textResponse);
-      } catch (e) {
-        console.error("NOT JSON RESPONSE:", textResponse);
-        throw new Error("Server returned invalid response (not JSON)");
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to generate");
-      }
-
+      const data = await response.json();
       setResult(data);
       setTab("flashcards");
-      setLoading(false);
-      return;
-    }
 
-    // TEXT MODE API CALL
-    const res = await fetch("https://ai-study-tool-api.onrender.com", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ content: userContent }),
-    });
-
-    const textResponse = await res.text();
-
-    let data;
-    try {
-      data = JSON.parse(textResponse);
     } catch (e) {
-      console.error("NOT JSON RESPONSE:", textResponse);
-      throw new Error("Server returned invalid response (not JSON)");
+      console.error("Error:", e);
+      setError("Failed to generate. Please try again. Error: " + e.message);
     }
 
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to generate");
-    }
-
-    setResult(data);
-    setTab("flashcards");
-
-  } catch (e) {
-    console.error(e);
-    setError(e.message || "Something went wrong");
-  }
-
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans, sans-serif", padding: "0 0 60px" }}>
@@ -342,70 +246,25 @@ const res = await fetch("https://ai-study-tool-api.onrender.com/generate", {
           </span>
         </h1>
         <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 16, margin: 0 }}>
-          Upload a PDF, image, or paste text — get instant study materials
+          Paste text and get instant study materials
         </p>
       </div>
 
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
-            {[["text", "✏️ Text"], ["file", "📎 PDF / Image"]].map(([val, label]) => (
-              <button key={val} onClick={() => { setInputType(val); setError(""); }}
-                style={{
-                  padding: "8px 20px", borderRadius: 100, border: "none",
-                  cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 13,
-                  background: inputType === val ? COLORS.text : "transparent",
-                  color: inputType === val ? COLORS.bg : COLORS.muted,
-                  transition: "all 0.2s",
-                }}>{label}</button>
-            ))}
-          </div>
-
-          {inputType === "text" ? (
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="Paste your notes, textbook chapter, article, or any study material here..."
-              style={{
-                width: "100%", minHeight: 180,
-                background: COLORS.bg, border: `1px solid ${COLORS.border}`,
-                borderRadius: 14, padding: 18,
-                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, lineHeight: 1.7,
-                outline: "none",
-              }}
-            />
-          ) : (
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
-              onClick={() => fileRef.current.click()}
-              style={{
-                border: `2px dashed ${dragOver ? COLORS.accent : COLORS.border}`,
-                borderRadius: 14, padding: "36px 24px",
-                textAlign: "center", cursor: "pointer",
-                background: dragOver ? `${COLORS.accent}08` : COLORS.bg,
-                transition: "all 0.2s",
-              }}>
-              <input ref={fileRef} type="file" accept=".pdf,.txt,image/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
-              {file ? (
-                <div>
-                  {fileType === "image" && filePreview && (
-                    <img src={filePreview} alt="preview" style={{ maxHeight: 120, borderRadius: 10, marginBottom: 12, maxWidth: "100%" }} />
-                  )}
-                  <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: "0 0 4px" }}>{file.name}</p>
-                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Click to change file</p>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
-                  <p style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, margin: "0 0 6px", fontSize: 16 }}>Drop your file here</p>
-                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Supports PDF, TXT and images (JPG, PNG)</p>
-                </div>
-              )}
-            </div>
-          )}
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Paste your notes, textbook chapter, article, or any study material here..."
+            style={{
+              width: "100%", minHeight: 180,
+              background: COLORS.bg, border: `1px solid ${COLORS.border}`,
+              borderRadius: 14, padding: 18,
+              color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, lineHeight: 1.7,
+              outline: "none",
+            }}
+          />
 
           {error && <p style={{ color: "#f47287", fontFamily: "DM Sans", fontSize: 14, margin: "12px 0 0" }}>{error}</p>}
 
@@ -420,7 +279,7 @@ const res = await fetch("https://ai-study-tool-api.onrender.com/generate", {
             boxShadow: loading ? "none" : `0 0 32px ${COLORS.accent}44`,
             transition: "all 0.3s",
           }}>
-            {loading ? <><Spinner /> Generating your study materials...</> : "✨ Generate Study Materials"}
+            {loading ? <><Spinner /> Generating...</> : "✨ Generate Study Materials"}
           </button>
         </div>
 

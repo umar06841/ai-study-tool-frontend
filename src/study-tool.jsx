@@ -208,14 +208,6 @@ export default function StudyTool() {
     reader.readAsDataURL(f);
   }, []);
 
-  const fileToBase64 = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result.split(",")[1]);
-    reader.onerror = reject;
-  });
-
   const generate = async () => {
   if (inputType === "text" && !text.trim()) {
     setError("Please paste some text first.");

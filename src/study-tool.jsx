@@ -179,7 +179,6 @@ function QuizSection({ questions }) {
   );
 }
 
-// Upgrade Button Component
 function UpgradeButton({ user, country, currency }) {
   const [loading, setLoading] = useState(false);
 
@@ -201,7 +200,6 @@ function UpgradeButton({ user, country, currency }) {
 
       const orderData = await orderRes.json();
 
-      // Open Razorpay
       const options = {
         key: "rzp_live_SgRCJHE3X4t4U4",
         amount: orderData.amount,
@@ -262,7 +260,7 @@ export default function StudyTool() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-  const [tab, setTab] = useState("flashcards");
+  const [tab, setTab] = useState("summary"); // DEFAULT TO SUMMARY
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef();
 
@@ -306,14 +304,47 @@ export default function StudyTool() {
     reader.onload = () => resolve(reader.result.split(",")[1]);
   });
 
-  const generate = async () => {
+  const handleGenerateClick = async () => {
+    // If not logged in, sign in first
     if (!user) {
-      setError("Please sign in first");
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        setUser(result.user);
+        const userRef = doc(db, "users", result.user.uid);
+        const snap = await getDoc(userRef);
+        if (!snap.exists()) {
+          await setDoc(userRef, {
+            email: result.user.email,
+            name: result.user.displayName,
+            tier: "free",
+            usesThisDay: 0,
+            createdAt: new Date(),
+          });
+          setUserTier("free");
+          setUsesThisDay(0);
+        } else {
+          setUserTier(snap.data().tier);
+          setUsesThisDay(snap.data().usesThisDay || 0);
+        }
+      } catch (err) {
+        console.error("Sign in error:", err);
+        setError("Sign in failed");
+        return;
+      }
+    }
+
+    // Then generate
+    await generate();
+  };
+
+  const generate = async () => {
+    if (inputType === "text" && !text.trim()) {
+      setError("Paste text first");
       return;
     }
 
-    if (inputType === "text" && !text.trim()) {
-      setError("Paste text first");
+    if (inputType === "file" && !file) {
+      setError("Upload file first");
       return;
     }
 
@@ -348,7 +379,7 @@ export default function StudyTool() {
       await updateDoc(userRef, { usesThisDay: usesThisDay + 1 });
       setUsesThisDay(usesThisDay + 1);
 
-      setTab("flashcards");
+      setTab("summary"); // Show summary first
     } catch (e) {
       console.error(e);
       setError("Failed to generate");
@@ -359,44 +390,6 @@ export default function StudyTool() {
 
   const currency = country === "IN" ? "INR" : "USD";
 
-  if (!user) {
-    return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontSize: 48, marginBottom: 20 }}>LearnOva</h1>
-        <button onClick={async () => {
-          const result = await signInWithPopup(auth, googleProvider);
-          setUser(result.user);
-          const userRef = doc(db, "users", result.user.uid);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(userRef, {
-              email: result.user.email,
-              name: result.user.displayName,
-              tier: "free",
-              usesThisDay: 0,
-              createdAt: new Date(),
-            });
-            setUserTier("free");
-          }
-        }} style={{
-          padding: "16px 32px",
-          background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
-          color: "#0a0a0f",
-          border: "none",
-          borderRadius: 100,
-          fontFamily: "Syne",
-          fontWeight: 800,
-          fontSize: 16,
-          cursor: "pointer",
-          boxShadow: `0 0 30px ${COLORS.accent}55`,
-        }}>
-          Sign in with Google
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans", padding: "0 0 60px" }}>
       <style>{`
@@ -405,31 +398,37 @@ export default function StudyTool() {
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
+      {/* HEADER */}
       <div style={{ textAlign: "center", padding: "40px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1200, margin: "0 auto" }}>
         <div>
           <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 32, margin: 0 }}>LearnOva</h1>
           <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
-            {userTier === "free" ? `5 uses/day left: ${5 - usesThisDay}` : "✨ Pro Subscriber"}
+            {user ? (userTier === "free" ? `5 uses/day: ${5 - usesThisDay} left` : "✨ Pro") : "Sign in to generate"}
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
-          <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
-            padding: "8px 16px",
-            background: "transparent",
-            border: `1px solid ${COLORS.border}`,
-            color: COLORS.muted,
-            borderRadius: 8,
-            cursor: "pointer",
-            fontFamily: "Syne",
-          }}>
-            Logout
-          </button>
+          {user && userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
+          {user && (
+            <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
+              padding: "8px 16px",
+              background: "transparent",
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.muted,
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "Syne",
+            }}>
+              Logout
+            </button>
+          )}
         </div>
       </div>
 
+      {/* MAIN CONTENT */}
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
+
+          {/* INPUT TYPE SELECTOR */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
             {[["text", "✏️ Text"], ["file", "📎 PDF/Image"]].map(([val, label]) => (
               <button key={val} onClick={() => { setInputType(val); setError(""); }}
@@ -442,11 +441,12 @@ export default function StudyTool() {
             ))}
           </div>
 
+          {/* TEXT AREA OR FILE UPLOAD */}
           {inputType === "text" ? (
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
-              placeholder="Paste your study material..."
+              placeholder="Paste your study material here..."
               style={{
                 width: "100%", minHeight: 180,
                 background: COLORS.bg, border: `1px solid ${COLORS.border}`,
@@ -471,14 +471,19 @@ export default function StudyTool() {
               {file ? (
                 <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: 0 }}>{file.name}</p>
               ) : (
-                <p style={{ color: COLORS.muted, margin: 0 }}>Drop file here or click</p>
+                <div>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+                  <p style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, margin: "0 0 6px", fontSize: 16 }}>Drop your file here</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>PDF or Images (JPG, PNG)</p>
+                </div>
               )}
             </div>
           )}
 
           {error && <p style={{ color: "#f47287", margin: "12px 0 0" }}>{error}</p>}
 
-          <button onClick={generate} disabled={loading} style={{
+          {/* GENERATE BUTTON */}
+          <button onClick={handleGenerateClick} disabled={loading} style={{
             marginTop: 20, width: "100%",
             background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
             color: loading ? COLORS.muted : "#0a0a0f",
@@ -488,17 +493,32 @@ export default function StudyTool() {
             display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
             boxShadow: loading ? "none" : `0 0 32px ${COLORS.accent}44`,
           }}>
-            {loading ? <><Spinner /> Generating...</> : "✨ Generate"}
+            {loading ? <><Spinner /> Generating...</> : "✨ Generate Study Materials"}
           </button>
         </div>
 
+        {/* RESULTS - SUMMARY FIRST */}
         {result && (
           <div style={{ animation: "fadeUp 0.5s ease" }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+              <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} color={COLORS.accent3}>📋 Summary</TabBtn>
               <TabBtn active={tab === "flashcards"} onClick={() => setTab("flashcards")} color={COLORS.accent}>🃏 Flashcards</TabBtn>
               <TabBtn active={tab === "quiz"} onClick={() => setTab("quiz")} color={COLORS.accent2}>📝 Quiz</TabBtn>
-              <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} color={COLORS.accent3}>📋 Summary</TabBtn>
             </div>
+
+            {tab === "summary" && (
+              <div style={{
+                background: COLORS.card, border: `1px solid ${COLORS.accent3}33`,
+                borderRadius: 16, padding: "28px 28px",
+                boxShadow: `0 0 32px ${COLORS.accent3}11`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 22 }}>📋</span>
+                  <span style={{ color: COLORS.accent3, fontFamily: "Syne", fontWeight: 700, letterSpacing: 1, fontSize: 13 }}>KEY SUMMARY</span>
+                </div>
+                <p style={{ color: COLORS.text, fontFamily: "DM Sans", fontSize: 16, lineHeight: 1.8, margin: 0 }}>{result.summary}</p>
+              </div>
+            )}
 
             {tab === "flashcards" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
@@ -507,16 +527,6 @@ export default function StudyTool() {
             )}
 
             {tab === "quiz" && <QuizSection questions={result.quiz} />}
-
-            {tab === "summary" && (
-              <div style={{
-                background: COLORS.card, border: `1px solid ${COLORS.accent3}33`,
-                borderRadius: 16, padding: "28px",
-                boxShadow: `0 0 32px ${COLORS.accent3}11`,
-              }}>
-                <p style={{ color: COLORS.text, fontFamily: "DM Sans", fontSize: 16, lineHeight: 1.8, margin: 0 }}>{result.summary}</p>
-              </div>
-            )}
           </div>
         )}
       </div>

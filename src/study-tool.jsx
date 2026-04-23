@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { auth, db } from "./firebase";
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from "firebase/auth";
+import { auth, googleProvider, db } from "./firebase";
+import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const COLORS = {
@@ -19,10 +14,6 @@ const COLORS = {
   muted: "#64748b",
 };
 
-const style = {
-  fontFace: `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');`,
-};
-
 function Spinner() {
   return (
     <div style={{
@@ -32,167 +23,6 @@ function Spinner() {
       borderRadius: "50%",
       animation: "spin 0.8s linear infinite",
     }} />
-  );
-}
-
-function LoginModal({ onClose, onLoginSuccess }) {
-  const [mode, setMode] = useState("login"); // login or signup
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      if (mode === "signup") {
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        // Create user document
-        const userRef = doc(db, "users", result.user.uid);
-        await setDoc(userRef, {
-          email: result.user.email,
-          tier: "free",
-          usesThisDay: 0,
-          lastResetDay: new Date().toDateString(),
-          createdAt: new Date(),
-        });
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      onLoginSuccess();
-      onClose();
-    } catch (err) {
-      setError(err.message);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: "rgba(0,0,0,0.7)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }}>
-      <div style={{
-        background: COLORS.card,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: 20,
-        padding: 28,
-        maxWidth: 400,
-        width: "90%",
-      }}>
-        <h2 style={{ color: COLORS.text, fontFamily: "Syne", margin: "0 0 20px", fontSize: 24 }}>
-          {mode === "login" ? "Sign In" : "Create Account"}
-        </h2>
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            style={{
-              background: COLORS.bg,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: 10,
-              padding: "12px 16px",
-              color: COLORS.text,
-              fontFamily: "DM Sans",
-              fontSize: 14,
-            }}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            minLength={6}
-            style={{
-              background: COLORS.bg,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: 10,
-              padding: "12px 16px",
-              color: COLORS.text,
-              fontFamily: "DM Sans",
-              fontSize: 14,
-            }}
-          />
-
-          {error && <p style={{ color: "#f47287", fontSize: 12, margin: 0 }}>{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
-              color: loading ? COLORS.muted : "#0a0a0f",
-              border: "none",
-              borderRadius: 10,
-              padding: "12px 16px",
-              fontFamily: "Syne",
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            {loading ? <><Spinner /></> : mode === "login" ? "Sign In" : "Create Account"}
-          </button>
-        </form>
-
-        <div style={{ marginTop: 16, textAlign: "center" }}>
-          <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 14, margin: "0 0 12px" }}>
-            {mode === "login" ? "Don't have an account?" : "Already have an account?"}
-          </p>
-          <button
-            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: COLORS.accent,
-              cursor: "pointer",
-              fontFamily: "Syne",
-              fontWeight: 700,
-              textDecoration: "underline",
-            }}
-          >
-            {mode === "login" ? "Sign Up" : "Sign In"}
-          </button>
-        </div>
-
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: 16,
-            width: "100%",
-            background: "transparent",
-            border: `1px solid ${COLORS.border}`,
-            color: COLORS.muted,
-            borderRadius: 10,
-            padding: "10px 16px",
-            cursor: "pointer",
-            fontFamily: "Syne",
-          }}
-        >
-          Close
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -341,7 +171,7 @@ function QuizSection({ questions }) {
             {score}/{questions.length}
           </p>
           <p style={{ color: COLORS.muted, fontFamily: "DM Sans", margin: 0, fontSize: 14 }}>
-            {score === questions.length ? "🎉 Perfect score!" : score >= questions.length / 2 ? "Good job! Keep going 💪" : "Keep studying, you've got this! 📚"}
+            {score === questions.length ? "🎉 Perfect!" : score >= questions.length / 2 ? "Good job!" : "Keep studying!"}
           </p>
         </div>
       )}
@@ -427,13 +257,11 @@ export default function StudyTool() {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [fileType, setFileType] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-  const [tab, setTab] = useState("summary");
+  const [tab, setTab] = useState("summary"); // DEFAULT TO SUMMARY
   const [dragOver, setDragOver] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const fileRef = useRef();
 
   // Detect country
@@ -464,13 +292,10 @@ export default function StudyTool() {
     if (!f) return;
     const isPDF = f.type === "application/pdf";
     const isImage = f.type.startsWith("image/");
-    if (!isPDF && !isImage) { setError("Please upload a PDF or image file."); return; }
+    if (!isPDF && !isImage) { setError("PDF or image only"); return; }
     setFile(f);
     setFileType(isPDF ? "pdf" : "image");
     setError("");
-    const reader = new FileReader();
-    reader.onload = (e) => setFilePreview(e.target.result);
-    reader.readAsDataURL(f);
   }, []);
 
   const toBase64 = (file) => new Promise((resolve) => {
@@ -480,28 +305,52 @@ export default function StudyTool() {
   });
 
   const handleGenerateClick = async () => {
+    // If not logged in, sign in first
     if (!user) {
-      setShowLoginModal(true);
-      return;
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        setUser(result.user);
+        const userRef = doc(db, "users", result.user.uid);
+        const snap = await getDoc(userRef);
+        if (!snap.exists()) {
+          await setDoc(userRef, {
+            email: result.user.email,
+            name: result.user.displayName,
+            tier: "free",
+            usesThisDay: 0,
+            createdAt: new Date(),
+          });
+          setUserTier("free");
+          setUsesThisDay(0);
+        } else {
+          setUserTier(snap.data().tier);
+          setUsesThisDay(snap.data().usesThisDay || 0);
+        }
+      } catch (err) {
+        console.error("Sign in error:", err);
+        setError("Sign in failed");
+        return;
+      }
     }
 
+    // Then generate
     await generate();
   };
 
   const generate = async () => {
     if (inputType === "text" && !text.trim()) {
-      setError("Please paste some text first.");
+      setError("Paste text first");
       return;
     }
 
     if (inputType === "file" && !file) {
-      setError("Please upload a file first.");
+      setError("Upload file first");
       return;
     }
 
     // Check free tier limit
     if (userTier === "free" && usesThisDay >= 5) {
-      setError("You've reached your daily limit! Upgrade to Pro for unlimited uses.");
+      setError("Upgrade to Pro for unlimited uses!");
       return;
     }
 
@@ -530,10 +379,10 @@ export default function StudyTool() {
       await updateDoc(userRef, { usesThisDay: usesThisDay + 1 });
       setUsesThisDay(usesThisDay + 1);
 
-      setTab("summary");
+      setTab("summary"); // Show summary first
     } catch (e) {
       console.error(e);
-      setError("Failed to generate. Please try again.");
+      setError("Failed to generate");
     }
 
     setLoading(false);
@@ -542,102 +391,67 @@ export default function StudyTool() {
   const currency = country === "IN" ? "INR" : "USD";
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans, sans-serif", padding: "0 0 60px" }}>
+    <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans", padding: "0 0 60px" }}>
       <style>{`
-        ${style.fontFace}
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@400;500&display=swap');
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        * { box-sizing: border-box; }
-        textarea { resize: vertical; }
       `}</style>
 
-      {/* LOGIN MODAL */}
-      {showLoginModal && (
-        <LoginModal 
-          onClose={() => setShowLoginModal(false)}
-          onLoginSuccess={() => {}}
-        />
-      )}
-
-      {/* HEADER WITH USER INFO */}
-      <div style={{ textAlign: "right", padding: "20px 40px", display: "flex", justifyContent: "flex-end", gap: 12 }}>
-        {user && (
-          <>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "8px 16px",
-              background: COLORS.card,
-              borderRadius: 100,
-              border: `1px solid ${COLORS.border}`,
-            }}>
-              <span style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, fontSize: 13 }}>
-                {user.email}
-              </span>
-              <span style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 12 }}>
-                {userTier === "free" ? `${5 - usesThisDay}/5` : "Pro"}
-              </span>
-              <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
-                background: "transparent",
-                border: "none",
-                color: COLORS.muted,
-                cursor: "pointer",
-                fontFamily: "Syne",
-                fontWeight: 700,
-                fontSize: 12,
-              }}>
-                Logout
-              </button>
-            </div>
-            {userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
-          </>
-        )}
-      </div>
-
-      {/* HERO SECTION */}
-      <div style={{ textAlign: "center", padding: "52px 24px 32px" }}>
-        <div style={{ display: "inline-block", background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}33`, borderRadius: 100, padding: "6px 18px", marginBottom: 20 }}>
-          <span style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>AI STUDY TOOL — BY LEARNOVA</span>
+      {/* HEADER */}
+      <div style={{ textAlign: "center", padding: "40px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1200, margin: "0 auto" }}>
+        <div>
+          <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 32, margin: 0 }}>LearnOva</h1>
+          <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+            {user ? (userTier === "free" ? `5 uses/day: ${5 - usesThisDay} left` : "✨ Pro") : "Sign in to generate"}
+          </p>
         </div>
-        <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: "clamp(28px, 5vw, 48px)", margin: "0 0 12px", lineHeight: 1.1 }}>
-          Turn Any Content Into<br />
-          <span style={{ background: `linear-gradient(90deg, ${COLORS.accent}, ${COLORS.accent2})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Flashcards & Quizzes
-          </span>
-        </h1>
-        <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 16, margin: 0 }}>
-          Upload a PDF, image, or paste text — get instant study materials
-        </p>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {user && userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
+          {user && (
+            <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
+              padding: "8px 16px",
+              background: "transparent",
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.muted,
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "Syne",
+            }}>
+              Logout
+            </button>
+          )}
+        </div>
       </div>
 
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 
+          {/* INPUT TYPE SELECTOR */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
-            {[["text", "✏️ Text"], ["file", "📎 PDF / Image"]].map(([val, label]) => (
+            {[["text", "✏️ Text"], ["file", "📎 PDF/Image"]].map(([val, label]) => (
               <button key={val} onClick={() => { setInputType(val); setError(""); }}
                 style={{
                   padding: "8px 20px", borderRadius: 100, border: "none",
                   cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 13,
                   background: inputType === val ? COLORS.text : "transparent",
                   color: inputType === val ? COLORS.bg : COLORS.muted,
-                  transition: "all 0.2s",
                 }}>{label}</button>
             ))}
           </div>
 
+          {/* TEXT AREA OR FILE UPLOAD */}
           {inputType === "text" ? (
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
-              placeholder="Paste your notes, textbook chapter, article, or any study material here..."
+              placeholder="Paste your study material here..."
               style={{
                 width: "100%", minHeight: 180,
                 background: COLORS.bg, border: `1px solid ${COLORS.border}`,
                 borderRadius: 14, padding: 18,
-                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, lineHeight: 1.7,
+                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15,
                 outline: "none",
               }}
             />
@@ -652,29 +466,23 @@ export default function StudyTool() {
                 borderRadius: 14, padding: "36px 24px",
                 textAlign: "center", cursor: "pointer",
                 background: dragOver ? `${COLORS.accent}08` : COLORS.bg,
-                transition: "all 0.2s",
               }}>
               <input ref={fileRef} type="file" accept=".pdf,.txt,image/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
               {file ? (
-                <div>
-                  {fileType === "image" && filePreview && (
-                    <img src={filePreview} alt="preview" style={{ maxHeight: 120, borderRadius: 10, marginBottom: 12, maxWidth: "100%" }} />
-                  )}
-                  <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: "0 0 4px" }}>{file.name}</p>
-                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Click to change file</p>
-                </div>
+                <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: 0 }}>{file.name}</p>
               ) : (
                 <div>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
                   <p style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, margin: "0 0 6px", fontSize: 16 }}>Drop your file here</p>
-                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Supports PDF, TXT and images (JPG, PNG)</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>PDF or Images (JPG, PNG)</p>
                 </div>
               )}
             </div>
           )}
 
-          {error && <p style={{ color: "#f47287", fontFamily: "DM Sans", fontSize: 14, margin: "12px 0 0" }}>{error}</p>}
+          {error && <p style={{ color: "#f47287", margin: "12px 0 0" }}>{error}</p>}
 
+          {/* GENERATE BUTTON */}
           <button onClick={handleGenerateClick} disabled={loading} style={{
             marginTop: 20, width: "100%",
             background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
@@ -684,12 +492,12 @@ export default function StudyTool() {
             fontWeight: 800, fontSize: 16, cursor: loading ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
             boxShadow: loading ? "none" : `0 0 32px ${COLORS.accent}44`,
-            transition: "all 0.3s",
           }}>
-            {loading ? <><Spinner /> Generating your study materials...</> : "✨ Generate Study Materials"}
+            {loading ? <><Spinner /> Generating...</> : "✨ Generate Study Materials"}
           </button>
         </div>
 
+        {/* RESULTS - SUMMARY FIRST */}
         {result && (
           <div style={{ animation: "fadeUp 0.5s ease" }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>

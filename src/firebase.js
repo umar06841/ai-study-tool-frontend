@@ -3,13 +3,12 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAmRu_ZATsGo847qrBH9PcNmXUFDXeFFF4",
-  authDomain: "learnova-16738.firebaseapp.com",
-  projectId: "learnova-16738",
-  storageBucket: "learnova-16738.firebasestorage.app",
-  messagingSenderId: "18480231520",
-  appId: "1:18480231520:web:043972d515a0679ac2bf05",
-  measurementId: "G-Z5BB4BBFYM"
+  apiKey: "AIzaSyDM6E-Ubm88kNPSF9_f2PnT2gjzu2a_SVU",
+  authDomain: "learnova2.firebaseapp.com",
+  projectId: "learnova2",
+  storageBucket: "learnova2.firebasestorage.app",
+  messagingSenderId: "809578251971",
+  appId: "1:809578251971:web:f9ad1dc36be3640aba8476"
 };
 
 // Initialize Firebase

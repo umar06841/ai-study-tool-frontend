@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 // Your Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyD6hifDqHLMHNMLNYwSDq3I1q9szKDXL5s",
+  apiKey: "AIzaSyAcEiUv33MhlWLw6j2s-lQo3JqOGmUjQfU",
   authDomain: "learnova-16738.firebaseapp.com",
   projectId: "learnova-16738",
   storageBucket: "learnova-16738.firebasestorage.app",

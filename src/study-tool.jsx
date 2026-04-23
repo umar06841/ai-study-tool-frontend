@@ -7,7 +7,7 @@ import {
   onAuthStateChanged 
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-
+console.log("Auth object:", auth);
 const COLORS = {
   bg: "#0a0a0f",
   card: "#13131a",

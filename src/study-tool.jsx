@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { auth, googleProvider, db } from "./firebase";
-import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "./firebase";
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const COLORS = {
@@ -27,6 +32,167 @@ function Spinner() {
       borderRadius: "50%",
       animation: "spin 0.8s linear infinite",
     }} />
+  );
+}
+
+function LoginModal({ onClose, onLoginSuccess }) {
+  const [mode, setMode] = useState("login"); // login or signup
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (mode === "signup") {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        // Create user document
+        const userRef = doc(db, "users", result.user.uid);
+        await setDoc(userRef, {
+          email: result.user.email,
+          tier: "free",
+          usesThisDay: 0,
+          lastResetDay: new Date().toDateString(),
+          createdAt: new Date(),
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      onLoginSuccess();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.7)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}>
+      <div style={{
+        background: COLORS.card,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: 20,
+        padding: 28,
+        maxWidth: 400,
+        width: "90%",
+      }}>
+        <h2 style={{ color: COLORS.text, fontFamily: "Syne", margin: "0 0 20px", fontSize: 24 }}>
+          {mode === "login" ? "Sign In" : "Create Account"}
+        </h2>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: COLORS.text,
+              fontFamily: "DM Sans",
+              fontSize: 14,
+            }}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            minLength={6}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: COLORS.text,
+              fontFamily: "DM Sans",
+              fontSize: 14,
+            }}
+          />
+
+          {error && <p style={{ color: "#f47287", fontSize: 12, margin: 0 }}>{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
+              color: loading ? COLORS.muted : "#0a0a0f",
+              border: "none",
+              borderRadius: 10,
+              padding: "12px 16px",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {loading ? <><Spinner /></> : mode === "login" ? "Sign In" : "Create Account"}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 14, margin: "0 0 12px" }}>
+            {mode === "login" ? "Don't have an account?" : "Already have an account?"}
+          </p>
+          <button
+            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: COLORS.accent,
+              cursor: "pointer",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              textDecoration: "underline",
+            }}
+          >
+            {mode === "login" ? "Sign Up" : "Sign In"}
+          </button>
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 16,
+            width: "100%",
+            background: "transparent",
+            border: `1px solid ${COLORS.border}`,
+            color: COLORS.muted,
+            borderRadius: 10,
+            padding: "10px 16px",
+            cursor: "pointer",
+            fontFamily: "Syne",
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -267,6 +433,7 @@ export default function StudyTool() {
   const [result, setResult] = useState(null);
   const [tab, setTab] = useState("summary");
   const [dragOver, setDragOver] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const fileRef = useRef();
 
   // Detect country
@@ -313,37 +480,11 @@ export default function StudyTool() {
   });
 
   const handleGenerateClick = async () => {
-    // If not logged in, sign in first
     if (!user) {
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        setUser(result.user);
-        const userRef = doc(db, "users", result.user.uid);
-        const snap = await getDoc(userRef);
-        if (!snap.exists()) {
-          await setDoc(userRef, {
-            email: result.user.email,
-            name: result.user.displayName,
-            tier: "free",
-            usesThisDay: 0,
-            createdAt: new Date(),
-          });
-          setUserTier("free");
-          setUsesThisDay(0);
-        } else {
-          setUserTier(snap.data().tier);
-          setUsesThisDay(snap.data().usesThisDay || 0);
-        }
-        // After login, run generate
-        setTimeout(generate, 500);
-      } catch (err) {
-        console.error("Sign in error:", err);
-        setError("Sign in failed: " + err.message);
-      }
+      setShowLoginModal(true);
       return;
     }
 
-    // Already logged in, just generate
     await generate();
   };
 
@@ -410,6 +551,14 @@ export default function StudyTool() {
         textarea { resize: vertical; }
       `}</style>
 
+      {/* LOGIN MODAL */}
+      {showLoginModal && (
+        <LoginModal 
+          onClose={() => setShowLoginModal(false)}
+          onLoginSuccess={() => {}}
+        />
+      )}
+
       {/* HEADER WITH USER INFO */}
       <div style={{ textAlign: "right", padding: "20px 40px", display: "flex", justifyContent: "flex-end", gap: 12 }}>
         {user && (
@@ -423,11 +572,9 @@ export default function StudyTool() {
               borderRadius: 100,
               border: `1px solid ${COLORS.border}`,
             }}>
-              <img src={user.photoURL} alt="profile" style={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-              }} />
+              <span style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, fontSize: 13 }}>
+                {user.email}
+              </span>
               <span style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 12 }}>
                 {userTier === "free" ? `${5 - usesThisDay}/5` : "Pro"}
               </span>

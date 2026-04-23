@@ -14,6 +14,10 @@ const COLORS = {
   muted: "#64748b",
 };
 
+const style = {
+  fontFace: `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');`,
+};
+
 function Spinner() {
   return (
     <div style={{
@@ -171,7 +175,7 @@ function QuizSection({ questions }) {
             {score}/{questions.length}
           </p>
           <p style={{ color: COLORS.muted, fontFamily: "DM Sans", margin: 0, fontSize: 14 }}>
-            {score === questions.length ? "🎉 Perfect!" : score >= questions.length / 2 ? "Good job!" : "Keep studying!"}
+            {score === questions.length ? "🎉 Perfect score!" : score >= questions.length / 2 ? "Good job! Keep going 💪" : "Keep studying, you've got this! 📚"}
           </p>
         </div>
       )}
@@ -257,10 +261,11 @@ export default function StudyTool() {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-  const [tab, setTab] = useState("summary"); // DEFAULT TO SUMMARY
+  const [tab, setTab] = useState("summary");
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef();
 
@@ -292,10 +297,13 @@ export default function StudyTool() {
     if (!f) return;
     const isPDF = f.type === "application/pdf";
     const isImage = f.type.startsWith("image/");
-    if (!isPDF && !isImage) { setError("PDF or image only"); return; }
+    if (!isPDF && !isImage) { setError("Please upload a PDF or image file."); return; }
     setFile(f);
     setFileType(isPDF ? "pdf" : "image");
     setError("");
+    const reader = new FileReader();
+    reader.onload = (e) => setFilePreview(e.target.result);
+    reader.readAsDataURL(f);
   }, []);
 
   const toBase64 = (file) => new Promise((resolve) => {
@@ -326,31 +334,33 @@ export default function StudyTool() {
           setUserTier(snap.data().tier);
           setUsesThisDay(snap.data().usesThisDay || 0);
         }
+        // After login, run generate
+        setTimeout(generate, 500);
       } catch (err) {
         console.error("Sign in error:", err);
-        setError("Sign in failed");
-        return;
+        setError("Sign in failed: " + err.message);
       }
+      return;
     }
 
-    // Then generate
+    // Already logged in, just generate
     await generate();
   };
 
   const generate = async () => {
     if (inputType === "text" && !text.trim()) {
-      setError("Paste text first");
+      setError("Please paste some text first.");
       return;
     }
 
     if (inputType === "file" && !file) {
-      setError("Upload file first");
+      setError("Please upload a file first.");
       return;
     }
 
     // Check free tier limit
     if (userTier === "free" && usesThisDay >= 5) {
-      setError("Upgrade to Pro for unlimited uses!");
+      setError("You've reached your daily limit! Upgrade to Pro for unlimited uses.");
       return;
     }
 
@@ -379,10 +389,10 @@ export default function StudyTool() {
       await updateDoc(userRef, { usesThisDay: usesThisDay + 1 });
       setUsesThisDay(usesThisDay + 1);
 
-      setTab("summary"); // Show summary first
+      setTab("summary");
     } catch (e) {
       console.error(e);
-      setError("Failed to generate");
+      setError("Failed to generate. Please try again.");
     }
 
     setLoading(false);
@@ -391,67 +401,96 @@ export default function StudyTool() {
   const currency = country === "IN" ? "INR" : "USD";
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans", padding: "0 0 60px" }}>
+    <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans, sans-serif", padding: "0 0 60px" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@400;500&display=swap');
+        ${style.fontFace}
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        * { box-sizing: border-box; }
+        textarea { resize: vertical; }
       `}</style>
 
-      {/* HEADER */}
-      <div style={{ textAlign: "center", padding: "40px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1200, margin: "0 auto" }}>
-        <div>
-          <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 32, margin: 0 }}>LearnOva</h1>
-          <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
-            {user ? (userTier === "free" ? `5 uses/day: ${5 - usesThisDay} left` : "✨ Pro") : "Sign in to generate"}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {user && userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
-          {user && (
-            <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
+      {/* HEADER WITH USER INFO */}
+      <div style={{ textAlign: "right", padding: "20px 40px", display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        {user && (
+          <>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
               padding: "8px 16px",
-              background: "transparent",
+              background: COLORS.card,
+              borderRadius: 100,
               border: `1px solid ${COLORS.border}`,
-              color: COLORS.muted,
-              borderRadius: 8,
-              cursor: "pointer",
-              fontFamily: "Syne",
             }}>
-              Logout
-            </button>
-          )}
+              <img src={user.photoURL} alt="profile" style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+              }} />
+              <span style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 12 }}>
+                {userTier === "free" ? `${5 - usesThisDay}/5` : "Pro"}
+              </span>
+              <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
+                background: "transparent",
+                border: "none",
+                color: COLORS.muted,
+                cursor: "pointer",
+                fontFamily: "Syne",
+                fontWeight: 700,
+                fontSize: 12,
+              }}>
+                Logout
+              </button>
+            </div>
+            {userTier === "free" && <UpgradeButton user={user} country={country} currency={currency} />}
+          </>
+        )}
+      </div>
+
+      {/* HERO SECTION */}
+      <div style={{ textAlign: "center", padding: "52px 24px 32px" }}>
+        <div style={{ display: "inline-block", background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}33`, borderRadius: 100, padding: "6px 18px", marginBottom: 20 }}>
+          <span style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>AI STUDY TOOL — BY LEARNOVA</span>
         </div>
+        <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: "clamp(28px, 5vw, 48px)", margin: "0 0 12px", lineHeight: 1.1 }}>
+          Turn Any Content Into<br />
+          <span style={{ background: `linear-gradient(90deg, ${COLORS.accent}, ${COLORS.accent2})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Flashcards & Quizzes
+          </span>
+        </h1>
+        <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 16, margin: 0 }}>
+          Upload a PDF, image, or paste text — get instant study materials
+        </p>
       </div>
 
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 
-          {/* INPUT TYPE SELECTOR */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
-            {[["text", "✏️ Text"], ["file", "📎 PDF/Image"]].map(([val, label]) => (
+            {[["text", "✏️ Text"], ["file", "📎 PDF / Image"]].map(([val, label]) => (
               <button key={val} onClick={() => { setInputType(val); setError(""); }}
                 style={{
                   padding: "8px 20px", borderRadius: 100, border: "none",
                   cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 13,
                   background: inputType === val ? COLORS.text : "transparent",
                   color: inputType === val ? COLORS.bg : COLORS.muted,
+                  transition: "all 0.2s",
                 }}>{label}</button>
             ))}
           </div>
 
-          {/* TEXT AREA OR FILE UPLOAD */}
           {inputType === "text" ? (
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
-              placeholder="Paste your study material here..."
+              placeholder="Paste your notes, textbook chapter, article, or any study material here..."
               style={{
                 width: "100%", minHeight: 180,
                 background: COLORS.bg, border: `1px solid ${COLORS.border}`,
                 borderRadius: 14, padding: 18,
-                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15,
+                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, lineHeight: 1.7,
                 outline: "none",
               }}
             />
@@ -466,23 +505,29 @@ export default function StudyTool() {
                 borderRadius: 14, padding: "36px 24px",
                 textAlign: "center", cursor: "pointer",
                 background: dragOver ? `${COLORS.accent}08` : COLORS.bg,
+                transition: "all 0.2s",
               }}>
               <input ref={fileRef} type="file" accept=".pdf,.txt,image/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
               {file ? (
-                <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: 0 }}>{file.name}</p>
+                <div>
+                  {fileType === "image" && filePreview && (
+                    <img src={filePreview} alt="preview" style={{ maxHeight: 120, borderRadius: 10, marginBottom: 12, maxWidth: "100%" }} />
+                  )}
+                  <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: "0 0 4px" }}>{file.name}</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Click to change file</p>
+                </div>
               ) : (
                 <div>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
                   <p style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, margin: "0 0 6px", fontSize: 16 }}>Drop your file here</p>
-                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>PDF or Images (JPG, PNG)</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Supports PDF, TXT and images (JPG, PNG)</p>
                 </div>
               )}
             </div>
           )}
 
-          {error && <p style={{ color: "#f47287", margin: "12px 0 0" }}>{error}</p>}
+          {error && <p style={{ color: "#f47287", fontFamily: "DM Sans", fontSize: 14, margin: "12px 0 0" }}>{error}</p>}
 
-          {/* GENERATE BUTTON */}
           <button onClick={handleGenerateClick} disabled={loading} style={{
             marginTop: 20, width: "100%",
             background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
@@ -492,12 +537,12 @@ export default function StudyTool() {
             fontWeight: 800, fontSize: 16, cursor: loading ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
             boxShadow: loading ? "none" : `0 0 32px ${COLORS.accent}44`,
+            transition: "all 0.3s",
           }}>
-            {loading ? <><Spinner /> Generating...</> : "✨ Generate Study Materials"}
+            {loading ? <><Spinner /> Generating your study materials...</> : "✨ Generate Study Materials"}
           </button>
         </div>
 
-        {/* RESULTS - SUMMARY FIRST */}
         {result && (
           <div style={{ animation: "fadeUp 0.5s ease" }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>

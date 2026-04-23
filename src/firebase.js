@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAmRu_ZATsGo847qrBH9PcNmXUFDXeFFF4",
   authDomain: "learnova-16738.firebaseapp.com",
@@ -12,10 +11,7 @@ const firebaseConfig = {
   appId: "1:18480231520:web:043972d515a0679ac2bf05"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize services
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);

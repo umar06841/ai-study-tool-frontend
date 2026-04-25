@@ -35,7 +35,7 @@ function Spinner() {
   );
 }
 
-function LoginModal({ onClose, onLoginSuccess }) {
+function LoginModal({ onClose }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,7 +50,6 @@ function LoginModal({ onClose, onLoginSuccess }) {
     try {
       if (mode === "signup") {
         const result = await createUserWithEmailAndPassword(auth, email, password);
-        // Create user document
         const userRef = doc(db, "users", result.user.uid);
         await setDoc(userRef, {
           email: result.user.email,
@@ -59,19 +58,12 @@ function LoginModal({ onClose, onLoginSuccess }) {
           lastResetDay: new Date().toDateString(),
           createdAt: new Date(),
         });
-        
-        // IMPORTANT: Close modal immediately after signup
-        onLoginSuccess();
-        setLoading(false);
-        onClose();
-        return;
       } else {
         await signInWithEmailAndPassword(auth, email, password);
-        onLoginSuccess();
-        setLoading(false);
-        onClose();
-        return;
       }
+      
+      setLoading(false);
+      onClose(); // Close modal after successful login/signup
     } catch (err) {
       setError(err.message);
       setLoading(false);
@@ -110,6 +102,7 @@ function LoginModal({ onClose, onLoginSuccess }) {
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
+            disabled={loading}
             style={{
               background: COLORS.bg,
               border: `1px solid ${COLORS.border}`,
@@ -118,6 +111,7 @@ function LoginModal({ onClose, onLoginSuccess }) {
               color: COLORS.text,
               fontFamily: "DM Sans",
               fontSize: 14,
+              opacity: loading ? 0.6 : 1,
             }}
           />
 
@@ -128,6 +122,7 @@ function LoginModal({ onClose, onLoginSuccess }) {
             onChange={e => setPassword(e.target.value)}
             required
             minLength={6}
+            disabled={loading}
             style={{
               background: COLORS.bg,
               border: `1px solid ${COLORS.border}`,
@@ -136,6 +131,7 @@ function LoginModal({ onClose, onLoginSuccess }) {
               color: COLORS.text,
               fontFamily: "DM Sans",
               fontSize: 14,
+              opacity: loading ? 0.6 : 1,
             }}
           />
 
@@ -169,14 +165,16 @@ function LoginModal({ onClose, onLoginSuccess }) {
           </p>
           <button
             onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
+            disabled={loading}
             style={{
               background: "transparent",
               border: "none",
               color: COLORS.accent,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               fontFamily: "Syne",
               fontWeight: 700,
               textDecoration: "underline",
+              opacity: loading ? 0.6 : 1,
             }}
           >
             {mode === "login" ? "Sign Up" : "Sign In"}
@@ -185,6 +183,7 @@ function LoginModal({ onClose, onLoginSuccess }) {
 
         <button
           onClick={onClose}
+          disabled={loading}
           style={{
             marginTop: 16,
             width: "100%",
@@ -193,8 +192,9 @@ function LoginModal({ onClose, onLoginSuccess }) {
             color: COLORS.muted,
             borderRadius: 10,
             padding: "10px 16px",
-            cursor: "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             fontFamily: "Syne",
+            opacity: loading ? 0.6 : 1,
           }}
         >
           Close
@@ -444,7 +444,6 @@ export default function StudyTool() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const fileRef = useRef();
 
-  // Detect country
   useEffect(() => {
     fetch("https://ipapi.co/json/")
       .then(r => r.json())
@@ -452,7 +451,6 @@ export default function StudyTool() {
       .catch(() => setCountry("US"));
   }, []);
 
-  // Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -463,6 +461,8 @@ export default function StudyTool() {
           setUserTier(snap.data().tier);
           setUsesThisDay(snap.data().usesThisDay || 0);
         }
+      } else {
+        setUser(null);
       }
     });
     return unsubscribe;
@@ -492,7 +492,6 @@ export default function StudyTool() {
       setShowLoginModal(true);
       return;
     }
-
     await generate();
   };
 
@@ -507,7 +506,6 @@ export default function StudyTool() {
       return;
     }
 
-    // Check free tier limit
     if (userTier === "free" && usesThisDay >= 5) {
       setError("You've reached your daily limit! Upgrade to Pro for unlimited uses.");
       return;
@@ -515,6 +513,7 @@ export default function StudyTool() {
 
     setLoading(true);
     setError("");
+    setResult(null);
 
     try {
       let payload = { content: text || file.name, userId: user.uid, tier: userTier };
@@ -530,20 +529,21 @@ export default function StudyTool() {
         body: JSON.stringify(payload),
       });
 
+      if (!res.ok) throw new Error("Generation failed");
+
       const data = await res.json();
       setResult(data);
 
-      // Update usage
       const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, { usesThisDay: usesThisDay + 1 });
       setUsesThisDay(usesThisDay + 1);
 
       setTab("summary");
-      setLoading(false); // STOP LOADING HERE
     } catch (e) {
       console.error(e);
       setError("Failed to generate. Please try again.");
-      setLoading(false); // STOP LOADING ON ERROR TOO
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -559,15 +559,8 @@ export default function StudyTool() {
         textarea { resize: vertical; }
       `}</style>
 
-      {/* LOGIN MODAL */}
-      {showLoginModal && (
-        <LoginModal 
-          onClose={() => setShowLoginModal(false)}
-          onLoginSuccess={() => {}}
-        />
-      )}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
 
-      {/* HEADER WITH USER INFO */}
       <div style={{ textAlign: "right", padding: "20px 40px", display: "flex", justifyContent: "flex-end", gap: 12 }}>
         {user && (
           <>
@@ -603,7 +596,6 @@ export default function StudyTool() {
         )}
       </div>
 
-      {/* HERO SECTION */}
       <div style={{ textAlign: "center", padding: "52px 24px 32px" }}>
         <div style={{ display: "inline-block", background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}33`, borderRadius: 100, padding: "6px 18px", marginBottom: 20 }}>
           <span style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>AI STUDY TOOL — BY LEARNOVA</span>
@@ -619,7 +611,6 @@ export default function StudyTool() {
         </p>
       </div>
 
-      {/* MAIN CONTENT */}
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 

@@ -183,7 +183,6 @@ function LoginModal({ onClose }) {
 
         <button
           onClick={onClose}
-          disabled={loading}
           style={{
             marginTop: 16,
             width: "100%",
@@ -192,9 +191,8 @@ function LoginModal({ onClose }) {
             color: COLORS.muted,
             borderRadius: 10,
             padding: "10px 16px",
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: "pointer",
             fontFamily: "Syne",
-            opacity: loading ? 0.6 : 1,
           }}
         >
           Close
@@ -532,17 +530,18 @@ export default function StudyTool() {
       if (!res.ok) throw new Error("Generation failed");
 
       const data = await res.json();
+      
+      // Stop loading BEFORE setting result
+      setLoading(false);
       setResult(data);
+      setTab("summary");
 
       const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, { usesThisDay: usesThisDay + 1 });
       setUsesThisDay(usesThisDay + 1);
-
-      setTab("summary");
     } catch (e) {
       console.error(e);
       setError("Failed to generate. Please try again.");
-    } finally {
       setLoading(false);
     }
   };

@@ -36,7 +36,7 @@ function Spinner() {
 }
 
 function LoginModal({ onClose, onLoginSuccess }) {
-  const [mode, setMode] = useState("login"); // login or signup
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -59,15 +59,23 @@ function LoginModal({ onClose, onLoginSuccess }) {
           lastResetDay: new Date().toDateString(),
           createdAt: new Date(),
         });
+        
+        // IMPORTANT: Close modal immediately after signup
+        onLoginSuccess();
+        setLoading(false);
+        onClose();
+        return;
       } else {
         await signInWithEmailAndPassword(auth, email, password);
+        onLoginSuccess();
+        setLoading(false);
+        onClose();
+        return;
       }
-      onLoginSuccess();
-      onClose();
     } catch (err) {
       setError(err.message);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -531,12 +539,12 @@ export default function StudyTool() {
       setUsesThisDay(usesThisDay + 1);
 
       setTab("summary");
+      setLoading(false); // STOP LOADING HERE
     } catch (e) {
       console.error(e);
       setError("Failed to generate. Please try again.");
+      setLoading(false); // STOP LOADING ON ERROR TOO
     }
-
-    setLoading(false);
   };
 
   const currency = country === "IN" ? "INR" : "USD";

@@ -58,12 +58,19 @@ function LoginModal({ onClose }) {
           lastResetDay: new Date().toDateString(),
           createdAt: new Date(),
         });
+        // Close immediately after signup
+        setTimeout(() => {
+          setLoading(false);
+          onClose();
+        }, 500);
       } else {
         await signInWithEmailAndPassword(auth, email, password);
+        // Close immediately after signin
+        setTimeout(() => {
+          setLoading(false);
+          onClose();
+        }, 500);
       }
-      
-      setLoading(false);
-      onClose(); // Close modal after successful login/signup
     } catch (err) {
       setError(err.message);
       setLoading(false);

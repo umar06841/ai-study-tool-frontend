@@ -56,7 +56,7 @@ function TabBtn({ active, onClick, children, color }) {
 function Flashcard({ front, back, index }) {
   const [flipped, setFlipped] = useState(false);
   return (
-    <div onClick={() => setFlipped(f => !f)} style={{ cursor: "pointer", perspective: 1000, height: 180, borderRadius: 16 }}>
+    <div onClick={() => setFlipped(f => !f)} style={{ cursor: "pointer", height: 180, borderRadius: 16, perspective: 1000 }}>
       <div style={{
         position: "relative", width: "100%", height: "100%",
         transformStyle: "preserve-3d",
@@ -144,9 +144,9 @@ function QuizSection({ questions }) {
   );
 }
 
-// AUTH PAGE
-function AuthPage({ onSuccess }) {
-  const [mode, setMode] = useState("main"); // main, email-login, email-signup
+// AUTH MODAL
+function AuthModal({ onClose }) {
+  const [mode, setMode] = useState("main");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -169,7 +169,7 @@ function AuthPage({ onSuccess }) {
           createdAt: new Date(),
         });
       }
-      onSuccess();
+      onClose();
     } catch (err) {
       setError("Google sign-in failed. Try email instead.");
     }
@@ -181,7 +181,7 @@ function AuthPage({ onSuccess }) {
     setLoading(true);
     setError("");
     try {
-      if (mode === "email-signup") {
+      if (mode === "signup") {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, "users", result.user.uid), {
           email: result.user.email,
@@ -192,78 +192,41 @@ function AuthPage({ onSuccess }) {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      onSuccess();
+      onClose();
     } catch (err) {
-      setError(err.message.replace("Firebase: ", "").replace(/\(auth.*\)\.?/, ""));
+      setError(err.message.replace("Firebase: ", "").replace(/\(auth.*\)\.?/, "").trim());
     }
     setLoading(false);
   };
 
   return (
     <div style={{
-      minHeight: "100vh",
-      background: COLORS.bg,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000, padding: 20,
     }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@400;500&display=swap');
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        * { box-sizing: border-box; }
-        input { outline: none; }
-        textarea { outline: none; resize: vertical; }
-      `}</style>
-
-      {/* Badge */}
-      <div style={{ background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}33`, borderRadius: 100, padding: "6px 18px", marginBottom: 20 }}>
-        <span style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>AI STUDY TOOL — BY LEARNOVA</span>
-      </div>
-
-      <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: "clamp(28px, 5vw, 48px)", textAlign: "center", margin: "0 0 12px", lineHeight: 1.1 }}>
-        Turn Any Content Into<br />
-        <span style={{ background: `linear-gradient(90deg, ${COLORS.accent}, ${COLORS.accent2})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          Flashcards & Quizzes
-        </span>
-      </h1>
-      <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 16, margin: "0 0 40px", textAlign: "center" }}>
-        Upload a PDF, image, or paste text — get instant study materials
-      </p>
-
       <div style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.border}`,
-        borderRadius: 20,
-        padding: 32,
-        width: "100%",
-        maxWidth: 400,
-        animation: "fadeUp 0.5s ease",
+        borderRadius: 20, padding: 32,
+        maxWidth: 400, width: "100%",
+        animation: "fadeUp 0.3s ease",
       }}>
         {mode === "main" && (
           <>
-            <h2 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 22, margin: "0 0 24px", textAlign: "center" }}>
-              Get Started Free
+            <h2 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 22, margin: "0 0 8px", textAlign: "center" }}>
+              Sign in to continue
             </h2>
+            <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 14, textAlign: "center", margin: "0 0 24px" }}>
+              Create a free account to keep generating
+            </p>
 
-            {/* Google Login */}
             <button onClick={handleGoogleLogin} disabled={googleLoading} style={{
-              width: "100%",
-              background: "#fff",
-              border: "none",
-              borderRadius: 12,
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              cursor: googleLoading ? "not-allowed" : "pointer",
-              fontFamily: "Syne",
-              fontWeight: 700,
-              fontSize: 15,
-              marginBottom: 12,
+              width: "100%", background: "#fff", border: "none", borderRadius: 12,
+              padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 10, cursor: googleLoading ? "not-allowed" : "pointer",
+              fontFamily: "Syne", fontWeight: 700, fontSize: 15, marginBottom: 12,
             }}>
               {googleLoading ? <Spinner small /> : (
                 <svg width="20" height="20" viewBox="0 0 48 48">
@@ -283,35 +246,29 @@ function AuthPage({ onSuccess }) {
             </div>
 
             <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => { setMode("email-signup"); setError(""); }} style={{
-                flex: 1,
-                background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
-                color: "#0a0a0f",
-                border: "none",
-                borderRadius: 10,
-                padding: "12px",
-                fontFamily: "Syne",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}>Sign Up</button>
-              <button onClick={() => { setMode("email-login"); setError(""); }} style={{
-                flex: 1,
-                background: "transparent",
-                border: `1px solid ${COLORS.border}`,
-                color: COLORS.text,
-                borderRadius: 10,
-                padding: "12px",
-                fontFamily: "Syne",
-                fontWeight: 700,
-                cursor: "pointer",
+              <button onClick={() => { setMode("signup"); setError(""); }} style={{
+                flex: 1, background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
+                color: "#0a0a0f", border: "none", borderRadius: 10,
+                padding: "12px", fontFamily: "Syne", fontWeight: 700, cursor: "pointer",
+              }}>Sign Up Free</button>
+              <button onClick={() => { setMode("login"); setError(""); }} style={{
+                flex: 1, background: "transparent",
+                border: `1px solid ${COLORS.border}`, color: COLORS.text,
+                borderRadius: 10, padding: "12px", fontFamily: "Syne", fontWeight: 700, cursor: "pointer",
               }}>Sign In</button>
             </div>
 
             {error && <p style={{ color: "#f47287", fontSize: 13, margin: "12px 0 0", textAlign: "center" }}>{error}</p>}
+
+            <button onClick={onClose} style={{
+              marginTop: 16, width: "100%", background: "transparent",
+              border: "none", color: COLORS.muted, cursor: "pointer",
+              fontFamily: "DM Sans", fontSize: 13,
+            }}>Maybe later</button>
           </>
         )}
 
-        {(mode === "email-login" || mode === "email-signup") && (
+        {(mode === "login" || mode === "signup") && (
           <>
             <button onClick={() => { setMode("main"); setError(""); }} style={{
               background: "transparent", border: "none", color: COLORS.muted,
@@ -319,70 +276,35 @@ function AuthPage({ onSuccess }) {
             }}>← Back</button>
 
             <h2 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: 22, margin: "0 0 24px" }}>
-              {mode === "email-signup" ? "Create Account" : "Welcome Back"}
+              {mode === "signup" ? "Create Free Account" : "Welcome Back"}
             </h2>
 
             <form onSubmit={handleEmailAuth} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <input
-                type="email"
-                placeholder="Email address"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  padding: "13px 16px",
-                  color: COLORS.text,
-                  fontFamily: "DM Sans",
-                  fontSize: 14,
-                }}
+              <input type="email" placeholder="Email address" value={email}
+                onChange={e => setEmail(e.target.value)} required
+                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "13px 16px", color: COLORS.text, fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
               />
-              <input
-                type="password"
-                placeholder="Password (min 6 characters)"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                minLength={6}
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  padding: "13px 16px",
-                  color: COLORS.text,
-                  fontFamily: "DM Sans",
-                  fontSize: 14,
-                }}
+              <input type="password" placeholder="Password (min 6 characters)" value={password}
+                onChange={e => setPassword(e.target.value)} required minLength={6}
+                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "13px 16px", color: COLORS.text, fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
               />
-
               {error && <p style={{ color: "#f47287", fontSize: 13, margin: 0 }}>{error}</p>}
-
               <button type="submit" disabled={loading} style={{
                 background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
                 color: loading ? COLORS.muted : "#0a0a0f",
-                border: "none",
-                borderRadius: 10,
-                padding: "13px",
-                fontFamily: "Syne",
-                fontWeight: 700,
-                cursor: loading ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                fontSize: 15,
+                border: "none", borderRadius: 10, padding: "13px",
+                fontFamily: "Syne", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15,
               }}>
-                {loading ? <><Spinner small /> Please wait...</> : mode === "email-signup" ? "Create Account" : "Sign In"}
+                {loading ? <><Spinner small /> Please wait...</> : mode === "signup" ? "Create Account" : "Sign In"}
               </button>
             </form>
 
             <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, textAlign: "center", marginTop: 16 }}>
-              {mode === "email-signup" ? "Already have an account? " : "Don't have an account? "}
-              <span onClick={() => { setMode(mode === "email-signup" ? "email-login" : "email-signup"); setError(""); }}
+              {mode === "signup" ? "Already have an account? " : "Don't have an account? "}
+              <span onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(""); }}
                 style={{ color: COLORS.accent, cursor: "pointer", fontWeight: 700 }}>
-                {mode === "email-signup" ? "Sign In" : "Sign Up"}
+                {mode === "signup" ? "Sign In" : "Sign Up"}
               </span>
             </p>
           </>
@@ -397,6 +319,7 @@ export default function StudyTool() {
   const [userTier, setUserTier] = useState("free");
   const [usesThisDay, setUsesThisDay] = useState(0);
   const [authReady, setAuthReady] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [country, setCountry] = useState("IN");
   const [inputType, setInputType] = useState("text");
   const [text, setText] = useState("");
@@ -458,13 +381,25 @@ export default function StudyTool() {
   const generate = async () => {
     if (inputType === "text" && !text.trim()) { setError("Please paste some text first."); return; }
     if (inputType === "file" && !file) { setError("Please upload a file first."); return; }
-    if (userTier === "free" && usesThisDay >= 5) { setError("Daily limit reached! Upgrade to Pro."); return; }
+
+    // Check guest uses (1 free without login)
+    const guestUses = parseInt(localStorage.getItem("learnova_guest") || "0");
+    if (!user && guestUses >= 1) {
+      setError("Sign in to keep generating for free!");
+      setShowAuth(true);
+      return;
+    }
+
+    if (user && userTier === "free" && usesThisDay >= 5) {
+      setError("Daily limit reached! Upgrade to Pro for unlimited uses.");
+      return;
+    }
 
     setLoading(true);
     setError("");
 
     try {
-      let payload = { content: text || file.name, userId: user.uid, tier: userTier };
+      let payload = { content: text || file.name, userId: user?.uid || "guest", tier: userTier };
       if (inputType === "file" && fileType === "pdf") {
         payload.pdfBase64 = await toBase64(file);
       }
@@ -482,10 +417,18 @@ export default function StudyTool() {
       setResult(data);
       setTab("summary");
 
-      try {
-        await updateDoc(doc(db, "users", user.uid), { usesThisDay: usesThisDay + 1 });
-        setUsesThisDay(u => u + 1);
-      } catch (e) {}
+      // Track guest uses
+      if (!user) {
+        localStorage.setItem("learnova_guest", String(guestUses + 1));
+      }
+
+      // Update logged in user usage
+      if (user) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), { usesThisDay: usesThisDay + 1 });
+          setUsesThisDay(u => u + 1);
+        } catch (e) {}
+      }
 
     } catch (e) {
       setError("Generation failed. Please try again.");
@@ -493,7 +436,6 @@ export default function StudyTool() {
     }
   };
 
-  // Loading state
   if (!authReady) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -503,12 +445,6 @@ export default function StudyTool() {
     );
   }
 
-  // Not logged in
-  if (!user) {
-    return <AuthPage onSuccess={() => {}} />;
-  }
-
-  // Main app
   return (
     <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans, sans-serif", padding: "0 0 60px" }}>
       <style>{`
@@ -516,36 +452,46 @@ export default function StudyTool() {
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
         * { box-sizing: border-box; }
-        textarea { resize: vertical; }
+        textarea { resize: vertical; outline: none; }
+        input { outline: none; }
       `}</style>
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
 
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "20px 40px", gap: 12, flexWrap: "wrap" }}>
-        {userTier === "free" && (
-          <button style={{
+        {user ? (
+          <>
+            {userTier === "free" && (
+              <button style={{
+                padding: "10px 22px",
+                background: `linear-gradient(135deg, ${COLORS.accent3}, #ec4899)`,
+                color: "#0a0a0f", border: "none", borderRadius: 100,
+                fontFamily: "Syne", fontWeight: 800, fontSize: 13, cursor: "pointer",
+                boxShadow: `0 0 20px ${COLORS.accent3}44`,
+              }}>
+                ✨ Upgrade to Pro ({country === "IN" ? "₹399" : "$5"}/mo)
+              </button>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 100, padding: "8px 16px" }}>
+              {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />}
+              <span style={{ color: COLORS.muted, fontSize: 12, fontFamily: "DM Sans" }}>
+                {userTier === "free" ? `${5 - usesThisDay}/5 left` : "Pro ✨"}
+              </span>
+              <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
+                background: "transparent", border: "none", color: COLORS.muted, cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 12,
+              }}>Logout</button>
+            </div>
+          </>
+        ) : (
+          <button onClick={() => setShowAuth(true)} style={{
             padding: "10px 22px",
-            background: `linear-gradient(135deg, ${COLORS.accent3}, #ec4899)`,
-            color: "#0a0a0f",
-            border: "none",
-            borderRadius: 100,
-            fontFamily: "Syne",
-            fontWeight: 800,
-            fontSize: 13,
-            cursor: "pointer",
-            boxShadow: `0 0 20px ${COLORS.accent3}44`,
-          }}>
-            ✨ Upgrade to Pro ({country === "IN" ? "₹399" : "$5"}/mo)
-          </button>
+            background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
+            color: "#0a0a0f", border: "none", borderRadius: 100,
+            fontFamily: "Syne", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            boxShadow: `0 0 20px ${COLORS.accent}44`,
+          }}>Sign In</button>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 100, padding: "8px 16px" }}>
-          {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />}
-          <span style={{ color: COLORS.muted, fontSize: 12, fontFamily: "DM Sans", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {userTier === "free" ? `${5 - usesThisDay}/5 left` : "Pro"} · {user.displayName || user.email?.split("@")[0]}
-          </span>
-          <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
-            background: "transparent", border: "none", color: COLORS.muted, cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 12,
-          }}>Logout</button>
-        </div>
       </div>
 
       {/* HERO */}
@@ -568,7 +514,6 @@ export default function StudyTool() {
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 
-          {/* Tabs */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
             {[["text", "✏️ Text"], ["file", "📎 PDF / Image"]].map(([val, label]) => (
               <button key={val} onClick={() => { setInputType(val); setError(""); }}
@@ -622,7 +567,18 @@ export default function StudyTool() {
             </div>
           )}
 
-          {error && <p style={{ color: "#f47287", fontSize: 14, margin: "12px 0 0" }}>{error}</p>}
+          {error && (
+            <div style={{ marginTop: 12, padding: "10px 14px", background: "#f4728711", border: "1px solid #f4728744", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <p style={{ color: "#f47287", fontSize: 14, margin: 0 }}>{error}</p>
+              {!user && error.includes("Sign in") && (
+                <button onClick={() => setShowAuth(true)} style={{
+                  background: COLORS.accent, color: "#0a0a0f", border: "none",
+                  borderRadius: 8, padding: "6px 14px", fontFamily: "Syne",
+                  fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+                }}>Sign In →</button>
+              )}
+            </div>
+          )}
 
           <button onClick={generate} disabled={loading} style={{
             marginTop: 20, width: "100%",
@@ -636,6 +592,13 @@ export default function StudyTool() {
           }}>
             {loading ? <><Spinner small /> Generating your study materials...</> : "✨ Generate Study Materials"}
           </button>
+
+          {/* Guest notice */}
+          {!user && (
+            <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 12, textAlign: "center", margin: "12px 0 0" }}>
+              🎁 Try 1 time for free · Sign up for 5/day free
+            </p>
+          )}
         </div>
 
         {result && (

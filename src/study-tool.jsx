@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { auth, db } from "./firebase";
+import { auth, googleProvider, db } from "./firebase";
 import { 
   createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  signInWithPopup,
   signOut, 
   onAuthStateChanged 
 } from "firebase/auth";
@@ -41,6 +42,8 @@ function TabBtn({ active, onClick, children, color }) {
       fontFamily: "Syne",
       fontWeight: 700,
       fontSize: 14,
+      letterSpacing: 0.5,
+      transition: "all 0.2s",
       background: active ? color : "transparent",
       color: active ? "#0a0a0f" : COLORS.muted,
       boxShadow: active ? `0 0 20px ${color}55` : "none",
@@ -53,50 +56,46 @@ function Flashcard({ front, back, index }) {
   return (
     <div onClick={() => setFlipped(f => !f)} style={{
       cursor: "pointer",
+      perspective: 1000,
       height: 180,
       borderRadius: 16,
-      perspective: 1000,
     }}>
       <div style={{
         position: "relative",
         width: "100%",
         height: "100%",
         transformStyle: "preserve-3d",
-        transition: "transform 0.5s",
+        transition: "transform 0.5s cubic-bezier(.4,2,.6,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
         <div style={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
+          position: "absolute", width: "100%", height: "100%",
           backfaceVisibility: "hidden",
           background: `linear-gradient(135deg, #13131a, #1a1a2e)`,
           border: `1px solid ${COLORS.accent}33`,
           borderRadius: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-          boxSizing: "border-box",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "20px 24px", boxSizing: "border-box",
+          boxShadow: `0 4px 24px #6ee7b711`,
         }}>
-          <p style={{ color: COLORS.text, textAlign: "center", margin: 0, fontSize: 15 }}>{front}</p>
+          <span style={{ fontSize: 11, color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, letterSpacing: 2, marginBottom: 12, opacity: 0.7 }}>Q {index + 1} · TAP TO FLIP</span>
+          <p style={{ color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, textAlign: "center", margin: 0, lineHeight: 1.6 }}>{front}</p>
         </div>
         <div style={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
+          position: "absolute", width: "100%", height: "100%",
           backfaceVisibility: "hidden",
           transform: "rotateY(180deg)",
           background: `linear-gradient(135deg, #0f1a13, #13231a)`,
           border: `1px solid ${COLORS.accent}66`,
           borderRadius: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-          boxSizing: "border-box",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "20px 24px", boxSizing: "border-box",
+          boxShadow: `0 4px 24px #6ee7b722`,
         }}>
-          <p style={{ color: COLORS.accent, textAlign: "center", margin: 0, fontSize: 15 }}>{back}</p>
+          <span style={{ fontSize: 11, color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, letterSpacing: 2, marginBottom: 12, opacity: 0.7 }}>ANSWER</span>
+          <p style={{ color: COLORS.accent, fontFamily: "DM Sans", fontSize: 15, textAlign: "center", margin: 0, lineHeight: 1.6 }}>{back}</p>
         </div>
       </div>
     </div>
@@ -109,55 +108,76 @@ function QuizSection({ questions }) {
 
   if (!questions || questions.length === 0) return null;
 
-  const score = submitted ? questions.filter((q, i) => answers[i] === q.correct).length : null;
+  const score = submitted
+    ? questions.filter((q, i) => answers[i] === q.correct).length
+    : null;
 
   return (
     <div>
       {questions.map((q, i) => (
         <div key={i} style={{
           background: COLORS.card,
-          border: `1px solid ${COLORS.border}`,
+          border: `1px solid ${submitted
+            ? answers[i] === q.correct ? "#6ee7b744" : "#f4728744"
+            : COLORS.border}`,
           borderRadius: 14,
-          padding: "20px",
+          padding: "20px 24px",
           marginBottom: 16,
+          transition: "border 0.3s",
         }}>
-          <p style={{ color: COLORS.text, margin: "0 0 12px", fontSize: 15 }}>
-            <strong>Q{i + 1}.</strong> {q.question}
+          <p style={{ color: COLORS.text, fontFamily: "DM Sans", fontWeight: 500, margin: "0 0 14px", fontSize: 15 }}>
+            <span style={{ color: COLORS.accent2, fontFamily: "Syne", fontWeight: 700, marginRight: 8 }}>Q{i + 1}.</span>
+            {q.question}
           </p>
-          {q.options.map((opt, j) => (
-            <button key={j} disabled={submitted} onClick={() => setAnswers(a => ({ ...a, [i]: j }))}
-              style={{
-                width: "100%",
-                background: answers[i] === j ? COLORS.accent2 : "transparent",
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: 10,
-                padding: "10px",
-                marginBottom: 8,
-                color: answers[i] === j ? "#0a0a0f" : COLORS.muted,
-                cursor: "pointer",
-                textAlign: "left",
-              }}>
-              {String.fromCharCode(65 + j)}. {opt}
-            </button>
-          ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {q.options.map((opt, j) => {
+              const isSelected = answers[i] === j;
+              const isCorrect = j === q.correct;
+              let bg = "transparent";
+              let border = `1px solid ${COLORS.border}`;
+              let color = COLORS.muted;
+              if (submitted) {
+                if (isCorrect) { bg = "#6ee7b711"; border = `1px solid ${COLORS.accent}`; color = COLORS.accent; }
+                else if (isSelected && !isCorrect) { bg = "#f4728711"; border = "1px solid #f47287"; color = "#f47287"; }
+              } else if (isSelected) {
+                bg = "#818cf811"; border = `1px solid ${COLORS.accent2}`; color = COLORS.accent2;
+              }
+              return (
+                <button key={j} disabled={submitted} onClick={() => setAnswers(a => ({ ...a, [i]: j }))}
+                  style={{
+                    background: bg, border, color,
+                    borderRadius: 10, padding: "10px 16px",
+                    fontFamily: "DM Sans", fontSize: 14,
+                    cursor: submitted ? "default" : "pointer",
+                    textAlign: "left", transition: "all 0.2s",
+                  }}>
+                  <span style={{ fontWeight: 700, marginRight: 10 }}>{String.fromCharCode(65 + j)}.</span>{opt}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ))}
       {!submitted ? (
         <button onClick={() => setSubmitted(true)} style={{
-          background: COLORS.accent2,
-          color: "#0a0a0f",
-          border: "none",
-          borderRadius: 100,
-          padding: "12px 32px",
-          fontWeight: 700,
-          cursor: "pointer",
-        }}>
-          Submit
-        </button>
+          background: COLORS.accent2, color: "#0a0a0f",
+          border: "none", borderRadius: 100,
+          padding: "12px 32px", fontFamily: "Syne",
+          fontWeight: 700, fontSize: 15, cursor: "pointer",
+          boxShadow: `0 0 24px ${COLORS.accent2}55`,
+        }}>Submit Answers</button>
       ) : (
-        <div style={{ background: COLORS.card, borderRadius: 14, padding: "20px", textAlign: "center" }}>
-          <p style={{ color: COLORS.accent2, fontSize: 28, fontWeight: 800, margin: "0 0 4px" }}>
+        <div style={{
+          background: `linear-gradient(135deg, #13131a, #1a132e)`,
+          border: `1px solid ${COLORS.accent2}44`,
+          borderRadius: 14, padding: "20px 24px",
+          textAlign: "center",
+        }}>
+          <p style={{ color: COLORS.accent2, fontFamily: "Syne", fontWeight: 800, fontSize: 28, margin: "0 0 4px" }}>
             {score}/{questions.length}
+          </p>
+          <p style={{ color: COLORS.muted, fontFamily: "DM Sans", margin: 0, fontSize: 14 }}>
+            {score === questions.length ? "🎉 Perfect score!" : score >= questions.length / 2 ? "Good job! Keep going 💪" : "Keep studying, you've got this! 📚"}
           </p>
         </div>
       )}
@@ -165,25 +185,232 @@ function QuizSection({ questions }) {
   );
 }
 
-export default function StudyTool() {
-  const [user, setUser] = useState(null);
-  const [authMode, setAuthMode] = useState("none"); // none, login, signup
+function LoginModal({ onClose }) {
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  const handleEmailAuth = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      if (mode === "signup") {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        const userRef = doc(db, "users", result.user.uid);
+        await setDoc(userRef, {
+          email: result.user.email,
+          tier: "free",
+          usesThisDay: 0,
+          lastResetDay: new Date().toDateString(),
+          createdAt: new Date(),
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      setLoading(false);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const userRef = doc(db, "users", result.user.uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          email: result.user.email,
+          name: result.user.displayName,
+          tier: "free",
+          usesThisDay: 0,
+          lastResetDay: new Date().toDateString(),
+          createdAt: new Date(),
+        });
+      }
+      setLoading(false);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.7)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}>
+      <div style={{
+        background: COLORS.card,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: 20,
+        padding: 28,
+        maxWidth: 400,
+        width: "90%",
+      }}>
+        <h2 style={{ color: COLORS.text, fontFamily: "Syne", margin: "0 0 20px", fontSize: 24 }}>
+          {mode === "login" ? "Sign In" : "Create Account"}
+        </h2>
+
+        <button onClick={handleGoogleLogin} disabled={loading} style={{
+          width: "100%",
+          background: "white",
+          color: "#0a0a0f",
+          border: "none",
+          borderRadius: 10,
+          padding: "12px",
+          fontFamily: "Syne",
+          fontWeight: 700,
+          cursor: loading ? "not-allowed" : "pointer",
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}>
+          🔐 Sign in with Google
+        </button>
+
+        <div style={{ textAlign: "center", marginBottom: 16, color: COLORS.muted, fontSize: 12 }}>OR</div>
+
+        <form onSubmit={handleEmailAuth} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: COLORS.text,
+              fontFamily: "DM Sans",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+
+          <input
+            type="password"
+            placeholder="Password (min 6 chars)"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            minLength={6}
+            disabled={loading}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: COLORS.text,
+              fontFamily: "DM Sans",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+
+          {error && <p style={{ color: "#f47287", fontSize: 12, margin: 0 }}>{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
+              color: loading ? COLORS.muted : "#0a0a0f",
+              border: "none",
+              borderRadius: 10,
+              padding: "12px 16px",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {loading ? <><Spinner /></> : mode === "login" ? "Sign In" : "Create Account"}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 14, margin: "0 0 12px" }}>
+            {mode === "login" ? "Don't have an account?" : "Already have an account?"}
+          </p>
+          <button
+            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
+            disabled={loading}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: COLORS.accent,
+              cursor: loading ? "not-allowed" : "pointer",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              textDecoration: "underline",
+            }}
+          >
+            {mode === "login" ? "Sign Up" : "Sign In"}
+          </button>
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 16,
+            width: "100%",
+            background: "transparent",
+            border: `1px solid ${COLORS.border}`,
+            color: COLORS.muted,
+            borderRadius: 10,
+            padding: "10px 16px",
+            cursor: "pointer",
+            fontFamily: "Syne",
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function StudyTool() {
+  const [user, setUser] = useState(null);
   const [inputType, setInputType] = useState("text");
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [tab, setTab] = useState("summary");
+  const [dragOver, setDragOver] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const fileRef = useRef();
 
-  // Auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -191,39 +418,17 @@ export default function StudyTool() {
     return unsubscribe;
   }, []);
 
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError("");
-
-    try {
-      if (authMode === "signup") {
-        await createUserWithEmailAndPassword(auth, email, password);
-        const userRef = doc(db, "users", auth.currentUser.uid);
-        await setDoc(userRef, {
-          email: auth.currentUser.email,
-          tier: "free",
-          usesThisDay: 0,
-          createdAt: new Date(),
-        });
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      
-      setAuthMode("none");
-      setEmail("");
-      setPassword("");
-    } catch (err) {
-      setAuthError(err.message);
-    }
-    
-    setAuthLoading(false);
-  };
-
   const handleFile = useCallback((f) => {
     if (!f) return;
+    const isPDF = f.type === "application/pdf";
+    const isImage = f.type.startsWith("image/");
+    if (!isPDF && !isImage) { setError("Please upload a PDF or image file."); return; }
     setFile(f);
-    setFileType(f.type === "application/pdf" ? "pdf" : "image");
+    setFileType(isPDF ? "pdf" : "image");
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (e) => setFilePreview(e.target.result);
+    reader.readAsDataURL(f);
   }, []);
 
   const toBase64 = (file) => new Promise((resolve) => {
@@ -232,24 +437,33 @@ export default function StudyTool() {
     reader.onload = () => resolve(reader.result.split(",")[1]);
   });
 
-  const generate = async () => {
+  const handleGenerateClick = async () => {
     if (!user) {
-      setAuthMode("login");
+      setShowLoginModal(true);
+      return;
+    }
+    await generate();
+  };
+
+  const generate = async () => {
+    if (inputType === "text" && !text.trim()) {
+      setError("Please paste some text first.");
       return;
     }
 
-    if (!text.trim() && !file) {
-      setError("Add text or file first");
+    if (inputType === "file" && !file) {
+      setError("Please upload a file first.");
       return;
     }
 
     setLoading(true);
     setError("");
+    setResult(null);
 
     try {
-      let payload = { content: text || "file", userId: user.uid, tier: "free" };
+      let payload = { content: text || file.name, userId: user.uid, tier: "free" };
 
-      if (file && fileType === "pdf") {
+      if (inputType === "file" && fileType === "pdf") {
         const base64 = await toBase64(file);
         payload.pdfBase64 = base64;
       }
@@ -260,195 +474,174 @@ export default function StudyTool() {
         body: JSON.stringify(payload),
       });
 
+      if (!res.ok) throw new Error("Generation failed");
+
       const data = await res.json();
-      setResult(data);
       setLoading(false);
+      setResult(data);
       setTab("summary");
     } catch (e) {
-      setError("Generation failed");
+      console.error(e);
+      setError("Failed to generate. Please try again.");
       setLoading(false);
     }
   };
 
-  if (!user) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        background: COLORS.bg,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-      }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
-          @keyframes spin { to { transform: rotate(360deg); } }
-        `}</style>
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "DM Sans", padding: "0 0 60px" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; } }
+        * { box-sizing: border-box; }
+        textarea { resize: vertical; }
+      `}</style>
 
-        <div style={{
-          background: COLORS.card,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 20,
-          padding: 40,
-          maxWidth: 400,
-          width: "100%",
-        }}>
-          <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontSize: 28, textAlign: "center", margin: "0 0 30px" }}>
-            LearnOva
-          </h1>
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
 
-          {authMode === "none" ? (
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setAuthMode("login")} style={{
-                flex: 1,
-                background: COLORS.accent,
-                color: "#0a0a0f",
-                border: "none",
-                borderRadius: 10,
-                padding: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}>Sign In</button>
-              <button onClick={() => setAuthMode("signup")} style={{
-                flex: 1,
-                background: "transparent",
-                border: `1px solid ${COLORS.accent}`,
-                color: COLORS.accent,
-                borderRadius: 10,
-                padding: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}>Sign Up</button>
-            </div>
-          ) : (
-            <form onSubmit={handleAuth} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  padding: "12px",
-                  color: COLORS.text,
-                }}
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  padding: "12px",
-                  color: COLORS.text,
-                }}
-              />
-              {authError && <p style={{ color: "#f47287", fontSize: 12, margin: 0 }}>{authError}</p>}
-              <button type="submit" disabled={authLoading} style={{
-                background: COLORS.accent,
-                color: "#0a0a0f",
-                border: "none",
-                borderRadius: 10,
-                padding: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}>
-                {authLoading ? <Spinner /> : "Continue"}
-              </button>
-              <button type="button" onClick={() => { setAuthMode("none"); setAuthError(""); }} style={{
+      <div style={{ textAlign: "right", padding: "20px 40px", display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        {user && (
+          <>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "8px 16px",
+              background: COLORS.card,
+              borderRadius: 100,
+              border: `1px solid ${COLORS.border}`,
+            }}>
+              <span style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, fontSize: 13 }}>
+                {user.displayName || user.email}
+              </span>
+              <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
                 background: "transparent",
                 border: "none",
                 color: COLORS.muted,
                 cursor: "pointer",
-              }}>Back</button>
-            </form>
-          )}
-        </div>
+                fontFamily: "Syne",
+                fontWeight: 700,
+                fontSize: 12,
+              }}>
+                Logout
+              </button>
+            </div>
+          </>
+        )}
       </div>
-    );
-  }
 
-  return (
-    <div style={{ minHeight: "100vh", background: COLORS.bg, padding: "0 0 60px" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; } }
-      `}</style>
-
-      <div style={{ padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontSize: 28, margin: 0 }}>LearnOva</h1>
-        <button onClick={async () => { await signOut(auth); setUser(null); }} style={{
-          background: "transparent",
-          border: `1px solid ${COLORS.border}`,
-          color: COLORS.muted,
-          borderRadius: 8,
-          padding: "8px 16px",
-          cursor: "pointer",
-        }}>Logout</button>
+      <div style={{ textAlign: "center", padding: "52px 24px 32px" }}>
+        <div style={{ display: "inline-block", background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}33`, borderRadius: 100, padding: "6px 18px", marginBottom: 20 }}>
+          <span style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>AI STUDY TOOL — BY LEARNOVA</span>
+        </div>
+        <h1 style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 800, fontSize: "clamp(28px, 5vw, 48px)", margin: "0 0 12px", lineHeight: 1.1 }}>
+          Turn Any Content Into<br />
+          <span style={{ background: `linear-gradient(90deg, ${COLORS.accent}, ${COLORS.accent2})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Flashcards & Quizzes
+          </span>
+        </h1>
+        <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 16, margin: 0 }}>
+          Upload a PDF, image, or paste text — get instant study materials
+        </p>
       </div>
 
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 28, marginBottom: 24 }}>
 
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Paste text here..."
-            style={{
-              width: "100%",
-              minHeight: 180,
-              background: COLORS.bg,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: 14,
-              padding: 18,
-              color: COLORS.text,
-              outline: "none",
-              fontFamily: "DM Sans",
-            }}
-          />
+          <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.bg, borderRadius: 100, padding: 4, width: "fit-content" }}>
+            {[["text", "✏️ Text"], ["file", "📎 PDF / Image"]].map(([val, label]) => (
+              <button key={val} onClick={() => { setInputType(val); setError(""); }}
+                style={{
+                  padding: "8px 20px", borderRadius: 100, border: "none",
+                  cursor: "pointer", fontFamily: "Syne", fontWeight: 700, fontSize: 13,
+                  background: inputType === val ? COLORS.text : "transparent",
+                  color: inputType === val ? COLORS.bg : COLORS.muted,
+                  transition: "all 0.2s",
+                }}>{label}</button>
+            ))}
+          </div>
 
-          {error && <p style={{ color: "#f47287", marginTop: 12, marginBottom: 0 }}>{error}</p>}
+          {inputType === "text" ? (
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Paste your notes, textbook chapter, article, or any study material here..."
+              style={{
+                width: "100%", minHeight: 180,
+                background: COLORS.bg, border: `1px solid ${COLORS.border}`,
+                borderRadius: 14, padding: 18,
+                color: COLORS.text, fontFamily: "DM Sans", fontSize: 15, lineHeight: 1.7,
+                outline: "none",
+              }}
+            />
+          ) : (
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
+              onClick={() => fileRef.current.click()}
+              style={{
+                border: `2px dashed ${dragOver ? COLORS.accent : COLORS.border}`,
+                borderRadius: 14, padding: "36px 24px",
+                textAlign: "center", cursor: "pointer",
+                background: dragOver ? `${COLORS.accent}08` : COLORS.bg,
+                transition: "all 0.2s",
+              }}>
+              <input ref={fileRef} type="file" accept=".pdf,.txt,image/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
+              {file ? (
+                <div>
+                  {fileType === "image" && filePreview && (
+                    <img src={filePreview} alt="preview" style={{ maxHeight: 120, borderRadius: 10, marginBottom: 12, maxWidth: "100%" }} />
+                  )}
+                  <p style={{ color: COLORS.accent, fontFamily: "Syne", fontWeight: 700, margin: "0 0 4px" }}>{file.name}</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Click to change file</p>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+                  <p style={{ color: COLORS.text, fontFamily: "Syne", fontWeight: 700, margin: "0 0 6px", fontSize: 16 }}>Drop your file here</p>
+                  <p style={{ color: COLORS.muted, fontFamily: "DM Sans", fontSize: 13, margin: 0 }}>Supports PDF, TXT and images (JPG, PNG)</p>
+                </div>
+              )}
+            </div>
+          )}
 
-          <button onClick={generate} disabled={loading} style={{
-            marginTop: 20,
-            width: "100%",
+          {error && <p style={{ color: "#f47287", fontFamily: "DM Sans", fontSize: 14, margin: "12px 0 0" }}>{error}</p>}
+
+          <button onClick={handleGenerateClick} disabled={loading} style={{
+            marginTop: 20, width: "100%",
             background: loading ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accent2})`,
             color: loading ? COLORS.muted : "#0a0a0f",
-            border: "none",
-            borderRadius: 14,
-            padding: "16px",
-            fontWeight: 800,
-            cursor: loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
+            border: "none", borderRadius: 14,
+            padding: "16px 32px", fontFamily: "Syne",
+            fontWeight: 800, fontSize: 16, cursor: loading ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+            boxShadow: loading ? "none" : `0 0 32px ${COLORS.accent}44`,
+            transition: "all 0.3s",
           }}>
-            {loading ? <><Spinner /> Generating...</> : "✨ Generate"}
+            {loading ? <><Spinner /> Generating your study materials...</> : "✨ Generate Study Materials"}
           </button>
         </div>
 
         {result && (
           <div style={{ animation: "fadeUp 0.5s ease" }}>
-            <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
               <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} color={COLORS.accent3}>📋 Summary</TabBtn>
               <TabBtn active={tab === "flashcards"} onClick={() => setTab("flashcards")} color={COLORS.accent}>🃏 Flashcards</TabBtn>
               <TabBtn active={tab === "quiz"} onClick={() => setTab("quiz")} color={COLORS.accent2}>📝 Quiz</TabBtn>
             </div>
 
             {tab === "summary" && (
-              <div style={{ background: COLORS.card, borderRadius: 16, padding: 28 }}>
-                <p style={{ color: COLORS.text, lineHeight: 1.8, margin: 0 }}>{result.summary}</p>
+              <div style={{
+                background: COLORS.card, border: `1px solid ${COLORS.accent3}33`,
+                borderRadius: 16, padding: "28px 28px",
+                boxShadow: `0 0 32px ${COLORS.accent3}11`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 22 }}>📋</span>
+                  <span style={{ color: COLORS.accent3, fontFamily: "Syne", fontWeight: 700, letterSpacing: 1, fontSize: 13 }}>KEY SUMMARY</span>
+                </div>
+                <p style={{ color: COLORS.text, fontFamily: "DM Sans", fontSize: 16, lineHeight: 1.8, margin: 0 }}>{result.summary}</p>
               </div>
             )}
 

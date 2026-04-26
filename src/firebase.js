@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDM6E-Ubm88kNPSF9_f2PnT2gjzu2a_SVU",
+  apiKey: "AIzaSyDM6E-Ubm08kNPSF9_f2PnT2gjzu2a_SVU",
   authDomain: "learnova2.firebaseapp.com",
   projectId: "learnova2",
   storageBucket: "learnova2.firebasestorage.app",

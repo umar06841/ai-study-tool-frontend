@@ -344,6 +344,8 @@ export default function StudyTool() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        setShowAuth(false); // Auto close modal on login
+        setLoading(false);  // Stop any loading
         try {
           const snap = await getDoc(doc(db, "users", currentUser.uid));
           if (snap.exists()) {
